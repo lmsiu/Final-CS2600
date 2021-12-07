@@ -19,6 +19,7 @@
 //*** data ***//
 //struct to hold terminal state
 struct editorConfig{
+    int cx, cy; //x and y cordinates of cursor
     int screenrows;
     int screencolumns;
     struct termios orig_termios;
@@ -187,6 +188,23 @@ void abFree(struct abuf *ab){
 
 //input
 
+void editorMoveCursor(char key){
+    switch(key){
+        case 'a':
+        E.cx--;
+        break;
+        case 'd'
+        E.cx++;
+        break;
+        case 'w':
+        E.cy--;
+        break;
+        case 's':
+        E.cy++;
+        break;
+    }
+}
+
 void editorProcessKeyPress(){
     char c = editorReadKey();
 
@@ -195,6 +213,14 @@ void editorProcessKeyPress(){
         write(STDOUT_FILENO, "\x1b[2J", 4);
         write(STDOUT_FILENO, "\x1b[H", 3);
         exit(0);
+        break;
+
+        //use w, s, d, a to move cursor
+        case 'w':
+        case 's':
+        case 'a':
+        case 'd':
+        editorMoveCursor(c);
         break;
     }
 }
@@ -247,6 +273,11 @@ void editorRefreshScreen(){
 
     editorDrawSquigleRows(&ab);
 
+    //move cursor to E.cx and E.cy
+    char buff[32];
+    snprintf(buff, sizeof(buff), "\x1b[%d;%dH", E.cy + 1, E.cx + 1);
+    abAppend(&ab, buff, strlen(buff));
+
     //hide cursor when refreashing screen
     abAppend(&ab, "\x1b[H", 3);
     abAppend(&ab, "\x1b[?25h", 6);
@@ -261,6 +292,10 @@ void editorRefreshScreen(){
 
 //initialize all fields in E struct
 void initEditor(){
+    //set cursor to 0,0
+    E.cx = 0;
+    E.cy = 0;
+    
     if(getWindowsSize(&E.screenrows, &E.screencolumns) == -1){
         die("getWindowSize");
     }
