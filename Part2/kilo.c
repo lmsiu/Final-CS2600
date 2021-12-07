@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <string.h>
+#include <sys/types.h>
 
 //definitions
 //welcome msg
@@ -29,11 +30,20 @@ enum editorKey{
 };
 
 //*** data ***//
+
+//struct for rows in the text editor
+typedef struct erow{
+    int size;
+    char *chars;
+} erow;
+
 //struct to hold terminal state
 struct editorConfig{
     int cx, cy; //x and y cordinates of cursor
     int screenrows;
     int screencolumns;
+    int numrows;
+    erow row;
     struct termios orig_termios;
 };
 
@@ -219,6 +229,19 @@ int getWindowsSize(int *rows, int *columns){
     }
 }
 
+//*** file i/o ***//
+
+void editorOpen(){
+    char *line = "Hello World!";
+    ssize_t linelen = 13;
+
+    E.row.size = linelen;
+    E.row.chars = malloc(linelen + 1);
+    memcpy(E.row.chars, line, linelen);
+    E.row.chars[linelen] = '\0';
+    E.numrows = 1;
+}
+
 //*** append buffer ***//
 //buffers for rewriting and refreashing things
 struct abuf {
@@ -317,6 +340,7 @@ void editorProcessKeyPress(){
 void editorDrawSquigleRows(struct abuf *ab){
     int y;
     for(y=0; y < E.screenrows; y++){
+        if(y >= E.numrows){
         if(y==E.screenrows/3){
         //load welcome msg
         char welcome[80];
@@ -337,6 +361,13 @@ void editorDrawSquigleRows(struct abuf *ab){
         abAppend(ab, welcome, welcomelen);
         } else{
             abAppend(ab, "~", 1);
+        }
+        }else {
+            int len = E.row.size;
+            if(len > E.screencolumns){
+                len = E.screencolumns;
+            }
+            abAppend(ab, E.row.chars, len);
         }
 
 
@@ -391,6 +422,8 @@ void initEditor(){
     //set cursor to 0,0
     E.cx = 0;
     E.cy = 0;
+    //set rows to 0 at first
+    E.numrows = 0;
     
     if(getWindowsSize(&E.screenrows, &E.screencolumns) == -1){
         die("getWindowSize");
@@ -400,6 +433,7 @@ void initEditor(){
 int main(){
     enableRawMode();
     initEditor();
+    editorOpen();
 
     //read 1 character from the standaed input into c until there are no more bytes to read
     //return 0 at the end of the file
