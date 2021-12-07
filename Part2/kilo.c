@@ -8,8 +8,12 @@
 #include <stdio.h>
 #include <errno.h>
 #include <sys/ioctl.h>
+#include <string.h>
 
 //definitions
+//welcome msg
+#define KILO_VERSION "0.0.1"
+
 #define CTRL_KEY(k) ((k) & 0x1f) //define ctrl key for ctrl-q to quits
 
 //*** data ***//
@@ -19,6 +23,7 @@ struct editorConfig{
     int screencolumns;
     struct termios orig_termios;
 };
+
 
 struct editorConfig E;
 
@@ -106,7 +111,16 @@ int getCursorPosition(int *rows, int *cols){
 
     buff[i] = '\0';
 
-    printf("\r\n&buff[1]: '%s'\r\n", &buff[1]);
+    if(buff[0] != '\x1b' || buff[1] != '['){
+        return -1;
+    }
+
+    if(sscanf(&buff[2], "%d;%d", rows, cols) != 2){
+        return -1;
+    }
+
+    return 0;
+    //printf("\r\n&buff[1]: '%s'\r\n", &buff[1]);
     /*
     printf("\r\n");
     char c;
@@ -119,9 +133,9 @@ int getCursorPosition(int *rows, int *cols){
     }
     */
 
-    editorReadKey();
+    //editorReadKey();
 
-    return -1;
+    //return -1;
 }
 
 //use ioctl to get size of terminal, returns -1 if fail
@@ -130,7 +144,7 @@ int getWindowsSize(int *rows, int *columns){
 
     //getting window size if unable to use ioctl on device
     //"\x1b[999C\x1b[999B" moves curser to bottom of the screen
-    if(1 || ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col==0){
+    if(ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col==0){
         if(write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12){
             return -1;
         }
@@ -142,6 +156,33 @@ int getWindowsSize(int *rows, int *columns){
         *rows = ws.ws_row;
         return 0;
     }
+}
+
+//*** append buffer ***//
+//buffers for rewriting and refreashing things
+struct abuf {
+    char *b;
+    int len;
+};
+
+#define ABUF_INIT {NULL, 0}
+
+void abAppend(struct abuf *ab, const char *s, int len){
+    char *new = realloc(ab->b, ab->len + len);
+
+    if(new == NULL){
+        return;
+    }
+
+    memcpy(&new[ab->len], s, len);
+    ab->b = new;
+    ab->len += len;
+
+}
+
+//destructor for append buffer
+void abFree(struct abuf *ab){
+    free(ab->b);
 }
 
 //input
@@ -161,27 +202,57 @@ void editorProcessKeyPress(){
 //*** output ***//
 
 //make a column of ~
-void editorDrawSquigleRows(){
+void editorDrawSquigleRows(struct abuf *ab){
     int y;
     for(y=0; y < E.screenrows; y++){
-        //make a column of ~
-        write(STDOUT_FILENO, "~\r\n", 3);
-    }
+        if(y==E,screenrows/3){
+        //load welcome msg
+        char welcome[80];
+        int welcomelen = snprintf(welcome, sizeof(welcome), "Kilo editor -- version %s", KILO_VERSION);
+        if(welcomelen > E.screencols){
+            welcomelen = E.screencols;
+        }
+        abAppend(ab, welcome, welcomelen);
+        } else{
+            abAppend(ab, "~", 1)
+        }
 
+
+        abAppend(ab, "~", 1);
+        //write(STDOUT_FILENO, "~", 1);
+        //make a column of ~
+        //clear each line before redrawing them
+        abAppend(ab, "\x1b[K", 3);
+        if(y<E.screenrows - 1){
+            abAppend(ab, "\r\n", 2);
+        //write(STDOUT_FILENO, "\r\n", 2);
+    }
+    }
 }
 
 void editorRefreshScreen(){
+    struct abuf ab = ABUF_INIT;
+
+    abAppend(&ab, "\x1b[?25l", 6);
+    //abAppend(&ab, "\x1b[2J", 4);
+    abAppend(&ab, "\x1b[H", 3);
+
     // \x1b is the escape key(27 in decimal)
     //[ is part of the escape sequence
     //J clears screen
-    write(STDOUT_FILENO, "\x1b[2J", 4);
+    //write(STDOUT_FILENO, "\x1b[2J", 4);
     //reposition curser to bottom left
     //can use <esc>[12;40H for a bigger size screen 80x24
-    write(STDOUT_FILENO, "\x1b[H", 3);
+    //write(STDOUT_FILENO, "\x1b[H", 3);
 
-    editorDrawSquigleRows();
+    editorDrawSquigleRows(&ab);
 
-    write(STDOUT_FILENO, "\x1b[H", 3);
+    //hide cursor when refreashing screen
+    abAppend(&ab, "\x1b[H", 3);
+    abAppend(&ab, "\x1b[?25h", 6);
+
+    write(STDOUT_FILENO, ab.b, ab.len);
+    abFree(&ab);
 }
 
 
