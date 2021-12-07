@@ -16,6 +16,13 @@
 
 #define CTRL_KEY(k) ((k) & 0x1f) //define ctrl key for ctrl-q to quits
 
+enum editorKey{
+    ARROW_LEFT = 1000,
+    ARROW_RIGHT,
+    ARROW_UP,
+    ARROW_DOWN
+};
+
 //*** data ***//
 //struct to hold terminal state
 struct editorConfig{
@@ -78,7 +85,7 @@ void enableRawMode(){
 }
 
 //read basic keypress mapping and stop printing key presses
-char editorReadKey(){
+int editorReadKey(){
     int nread;
     char c;
 
@@ -87,7 +94,30 @@ char editorReadKey(){
             die("read");
     }
     }
+
+    if( c == '\x1b'){
+    char seq[3];
+    //read arrows
+    if(read(STDIN_FILENO, &seq[0], 1) != 1){
+        return '\x1b';
+    }
+    if(read(STDIN_FILENO, &seq[1], 1) != 1){
+        return '\x1b';
+    }
+
+    if(seq[0] == '['){
+        switch(seq[1]){
+            case 'A': return ARROW_UP;
+            case 'B': return ARROW_DOWN;
+            case 'C': return ARROW_RIGHT;
+            case 'D': return ARROW_LEFT;
+        }
+    }
+
+    return '\x1b';
+    }else{
     return c;
+    }
 }
 
 //get cursor position
@@ -188,25 +218,33 @@ void abFree(struct abuf *ab){
 
 //input
 
-void editorMoveCursor(char key){
+void editorMoveCursor(int key){
     switch(key){
-        case 'a':
-        E.cx--;
-        break;
-        case 'd'
-        E.cx++;
-        break;
-        case 'w':
-        E.cy--;
-        break;
-        case 's':
-        E.cy++;
-        break;
+        case ARROW_LEFT:
+        if(E.cx != 0){
+            E.cx--;
+        }
+            break;
+        case ARROW_RIGHT:
+        if(E.cx != E.screencolumns - 1){
+            E.cx++;
+        }
+            break;
+        case ARROW_UP:
+        if(E.cy != 0){
+            E.cy--;
+        }
+            break;
+        case ARROW_DOWN:
+        if(E.cy != E.screenrows - 1){
+            E.cy++;
+        }
+            break;
     }
 }
 
 void editorProcessKeyPress(){
-    char c = editorReadKey();
+    int c = editorReadKey();
 
     switch(c){
         case CTRL_KEY('q'):
@@ -216,12 +254,12 @@ void editorProcessKeyPress(){
         break;
 
         //use w, s, d, a to move cursor
-        case 'w':
-        case 's':
-        case 'a':
-        case 'd':
-        editorMoveCursor(c);
-        break;
+        case ARROW_UP:
+        case ARROW_DOWN:
+        case ARROW_LEFT:
+        case ARROW_RIGHT:
+            editorMoveCursor(c);
+            break;
     }
 }
 
@@ -231,16 +269,26 @@ void editorProcessKeyPress(){
 void editorDrawSquigleRows(struct abuf *ab){
     int y;
     for(y=0; y < E.screenrows; y++){
-        if(y==E,screenrows/3){
+        if(y==E.screenrows/3){
         //load welcome msg
         char welcome[80];
         int welcomelen = snprintf(welcome, sizeof(welcome), "Kilo editor -- version %s", KILO_VERSION);
-        if(welcomelen > E.screencols){
-            welcomelen = E.screencols;
+        if(welcomelen > E.screencolumns){
+            welcomelen = E.screencolumns;
+        }
+
+        int padding = (E.screencolumns - welcomelen) /2;
+        if(padding){
+            abAppend(ab, "~", 1);
+            padding--;
+        }
+
+        while(padding--){
+            abAppend(ab, " ", 1);
         }
         abAppend(ab, welcome, welcomelen);
         } else{
-            abAppend(ab, "~", 1)
+            abAppend(ab, "~", 1);
         }
 
 
@@ -315,6 +363,7 @@ int main(){
     while(1){
         editorRefreshScreen();
         editorProcessKeyPress();
+
     }
     
     /*while(1){
