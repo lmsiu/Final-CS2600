@@ -44,6 +44,7 @@ typedef struct erow{
 //struct to hold terminal state
 struct editorConfig{
     int cx, cy; //x and y cordinates of cursor
+    int rowoff;
     int screenrows;
     int screencolumns;
     int numrows;
@@ -233,7 +234,7 @@ int getWindowsSize(int *rows, int *columns){
     }
 }
 
-/*** row ops ***/
+//*** row ops ***//
 void editorAppendRow(char *s, size_t len){
     E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
 
@@ -261,7 +262,7 @@ void editorOpen(char *filename){
     ssize_t linelen;
 
     //read all of file into E.row
-    while ((linelen = getline(&line, &linecap, fp)) != 1){
+    while ((linelen = getline(&line, &linecap, fp)) != -1){
     //if(linelen != -1){
         while(linelen > 0 && (line[linelen-1] == '\n' || line[linelen] == '\r')){
             linelen--;
@@ -323,7 +324,7 @@ void editorMoveCursor(int key){
         }
             break;
         case ARROW_DOWN:
-        if(E.cy != E.screenrows - 1){
+        if(E.cy < E.numrows){
             E.cy++;
         }
             break;
@@ -370,11 +371,22 @@ void editorProcessKeyPress(){
 
 //*** output ***//
 
+void editorScroll(){
+    if(E.cy < E.rowoff){
+        E.rowoff = E.cy;
+    }
+    if(E.cy >= E.rowoff + E.screenrows){
+        E.rowoff = E.cy - E.screenrows + 1;
+    }
+}
+
 //make a column of ~
 void editorDrawSquigleRows(struct abuf *ab){
     int y;
     for(y=0; y < E.screenrows; y++){
-        if(y >= E.numrows){
+        int filerow = y + E.rowoff;
+
+        if(filerow >= E.numrows){
         if(E.numrows == 0 && y==E.screenrows/3){
         //load welcome msg
         char welcome[80];
@@ -397,11 +409,11 @@ void editorDrawSquigleRows(struct abuf *ab){
             abAppend(ab, "~", 1);
         }
         }else {
-            int len = E.row[y].size;
+            int len = E.row[filerow].size;
             if(len > E.screencolumns){
                 len = E.screencolumns;
             }
-            abAppend(ab, E.row[y].chars, len);
+            abAppend(ab, E.row[filerow].chars, len);
         }
 
 
@@ -418,6 +430,8 @@ void editorDrawSquigleRows(struct abuf *ab){
 }
 
 void editorRefreshScreen(){
+    editorScroll();
+
     struct abuf ab = ABUF_INIT;
 
     abAppend(&ab, "\x1b[?25l", 6);
@@ -436,7 +450,7 @@ void editorRefreshScreen(){
 
     //move cursor to E.cx and E.cy
     char buff[32];
-    snprintf(buff, sizeof(buff), "\x1b[%d;%dH", E.cy + 1, E.cx + 1);
+    snprintf(buff, sizeof(buff), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, E.cx + 1);
     abAppend(&ab, buff, strlen(buff));
 
     //hide cursor when refreashing screen
@@ -456,6 +470,7 @@ void initEditor(){
     //set cursor to 0,0
     E.cx = 0;
     E.cy = 0;
+    E.rowoff = 0;
     //set rows to 0 at first
     E.numrows = 0;
     E.row = NULL;
