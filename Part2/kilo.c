@@ -246,7 +246,13 @@ void editorAppendRow(char *s, size_t len){
     E.row[at].chars = malloc(len + 1);
     memcpy(E.row[at].chars, s, len);
     E.row[at].chars[len] = '\0';
+    
+    E.row[at].rsize = 0;
+    E.row[at].render = NULL;
+
     E.numrows++;
+
+    
 
 }
 
@@ -407,7 +413,7 @@ void editorScroll(){
 }
 
 //make a column of ~
-void editorDrawSquigleRows(struct abuf *ab){
+void editorDrawRows(struct abuf *ab){
     int y;
     for(y=0; y < E.screenrows; y++){
         int filerow = y + E.rowoff;
@@ -475,7 +481,7 @@ void editorRefreshScreen(){
     //can use <esc>[12;40H for a bigger size screen 80x24
     //write(STDOUT_FILENO, "\x1b[H", 3);
 
-    editorDrawSquigleRows(&ab);
+    editorDrawRows(&ab);
 
     //move cursor to E.cx and E.cy
     char buff[32];
