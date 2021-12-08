@@ -418,12 +418,25 @@ void editorProcessKeyPress(){
             break;
 
         case END_KEY:
-            E.cx = E.screencolumns - 1;
+            if(E.cy < E.numrows){
+                //move to the end of the line
+                E.cx = E.row[E.cy].size;
+            }
             break;
 
         case PAGE_UP:
         case PAGE_DOWN:
         {
+            //make PAGE_DOWN go over a whole page
+            if(c == PAGE_UP){
+                E.cy = E.rowoff;
+            } else if(c == PAGE_DOWN){
+                E.cy = E.rowoff + E.screenrows - 1;
+                if(E.cy > E.numrows){
+                    E.cy = E.numrows;
+                }
+            }
+
             int times = E.screenrows;
             while(times--){
                 editorMoveCursor(c==PAGE_UP ? ARROW_UP : ARROW_DOWN);
@@ -509,10 +522,10 @@ void editorDrawRows(struct abuf *ab){
         //make a column of ~
         //clear each line before redrawing them
         abAppend(ab, "\x1b[K", 3);
-        if(y<E.screenrows - 1){
+        //if(y<E.screenrows - 1){
             abAppend(ab, "\r\n", 2);
         //write(STDOUT_FILENO, "\r\n", 2);
-    }
+        //}
     }
 }
 
@@ -567,6 +580,9 @@ void initEditor(){
     if(getWindowsSize(&E.screenrows, &E.screencolumns) == -1){
         die("getWindowSize");
     }
+
+    //make space for a status bar
+    E.screenrows -= 1;
 }
 
 int main(int argc, char *argv[]){
