@@ -38,7 +38,9 @@ enum editorKey{
 //struct for rows in the text editor
 typedef struct erow{
     int size;
+    int rsize; //for nonprintable chars like tab
     char *chars;
+    char *render; //holds value to print for nonprintable chars
 } erow;
 
 //struct to hold terminal state
@@ -314,11 +316,19 @@ void editorMoveCursor(int key){
         case ARROW_LEFT:
             if(E.cx != 0){
             E.cx--;
+            }else if(E.cy > 0){
+                //move to prev line if at end
+                E.cy--;
+                E.cx = E.row[E.cy].size;
             }
             break;
         case ARROW_RIGHT:
             if(row && E.cx < row->size){
             E.cx++;
+            }else if(row && E.cx == row->size){
+                //move to next line if at the end of a line
+                E.cy++;
+                E.cx = 0;
             }
             break;
         case ARROW_UP:
