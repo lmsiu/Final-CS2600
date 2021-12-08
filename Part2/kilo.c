@@ -1,6 +1,10 @@
 //making a kilo text editor
 
 //*** includes ***//
+#define _DEFAULT_SOURCE
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+
 #include <unistd.h>
 #include <termios.h>
 #include <stdlib.h>
@@ -43,7 +47,7 @@ struct editorConfig{
     int screenrows;
     int screencolumns;
     int numrows;
-    erow row;
+    erow *row;
     struct termios orig_termios;
 };
 
@@ -229,6 +233,20 @@ int getWindowsSize(int *rows, int *columns){
     }
 }
 
+/*** row ops ***/
+void editorAppendRow(char *s, size_t len){
+    E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
+
+    int at = E.numrows;
+    E.row[at].size = len;
+    E.row[at].chars = malloc(len + 1);
+    memcpy(E.row[at].chars, s, len);
+    E.row[at].chars[len] = '\0';
+    E.numrows++;
+
+}
+
+
 //*** file i/o ***//
 
 //allow users to open files
@@ -242,18 +260,16 @@ void editorOpen(char *filename){
     size_t linecap = 0;
     ssize_t linelen;
 
-    linelen = getline(&line, &linecap, fp);
-    if(linelen != -1){
+    //read all of file into E.row
+    while ((linelen = getline(&line, &linecap, fp)) != 1){
+    //if(linelen != -1){
         while(linelen > 0 && (line[linelen-1] == '\n' || line[linelen] == '\r')){
             linelen--;
         }
+        editorAppendRow(line, linelen);
     
 
-    E.row.size = linelen;
-    E.row.chars = malloc(linelen + 1);
-    memcpy(E.row.chars, line, linelen);
-    E.row.chars[linelen] = '\0';
-    E.numrows = 1;
+    
     }
 
     free(line);
@@ -359,7 +375,7 @@ void editorDrawSquigleRows(struct abuf *ab){
     int y;
     for(y=0; y < E.screenrows; y++){
         if(y >= E.numrows){
-        if(y==E.screenrows/3){
+        if(E.numrows == 0 && y==E.screenrows/3){
         //load welcome msg
         char welcome[80];
         int welcomelen = snprintf(welcome, sizeof(welcome), "Kilo editor -- version %s", KILO_VERSION);
@@ -381,11 +397,11 @@ void editorDrawSquigleRows(struct abuf *ab){
             abAppend(ab, "~", 1);
         }
         }else {
-            int len = E.row.size;
+            int len = E.row[y].size;
             if(len > E.screencolumns){
                 len = E.screencolumns;
             }
-            abAppend(ab, E.row.chars, len);
+            abAppend(ab, E.row[y].chars, len);
         }
 
 
@@ -442,6 +458,7 @@ void initEditor(){
     E.cy = 0;
     //set rows to 0 at first
     E.numrows = 0;
+    E.row = NULL;
     
     if(getWindowsSize(&E.screenrows, &E.screencolumns) == -1){
         die("getWindowSize");
