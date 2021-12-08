@@ -1,4 +1,4 @@
-//making a kilo text editor for fun!
+//making a kilo text editor for fun! //this was written here! hi!
 
 //*** includes ***//
 #define _DEFAULT_SOURCE
@@ -57,6 +57,7 @@ struct editorConfig{
     int screencolumns;
     int numrows;
     erow *row;
+    int dirty; //if the user has modified file w/o saving
     char *filename;
     char statusmsg[80];
     time_t statusmsg_time;
@@ -307,6 +308,7 @@ void editorAppendRow(char *s, size_t len){
     editorUpdateRow(&E.row[at]);
 
     E.numrows++;
+    E.dirty++;
 
     
 
@@ -323,6 +325,8 @@ void editorRowInsertChar(erow *row, int at, int c){
     row->size++;
     row->chars[at] = c;
     editorUpdateRow(row);
+
+    E.dirty++;
 }
 
 //*** editor ops **//
@@ -389,6 +393,7 @@ void editorOpen(char *filename){
 
     free(line);
     fclose(fp);
+    E.dirty = 0;
 }
 
 //write strings from editorRowsToString() to disk
@@ -406,6 +411,7 @@ void editorSave(){
             if(write(fd, buff, len)== len){
                 close(fd);
                 free(buff);
+                E.dirty = 0;
                 editorSetStatusMessage("%d bytes written to disk", len);
                 return;
             }
@@ -649,7 +655,7 @@ void editorDrawStatusBar(struct abuf *ab){
     //get file name and print up to 20 chars of it to the line, if no file name print "No Name"
     char status[80], rstatus[80];
 
-    int len = snprintf(status, sizeof(status), "%.20s - %d lines", E.filename ? E.filename : "[No Name]", E.numrows);
+    int len = snprintf(status, sizeof(status), "%.20s - %d lines %s", E.filename ? E.filename : "[No Name]", E.numrows, E.dirty ? "(modified)" : "");
     int rlen = snprintf(rstatus, sizeof(rstatus), "%d/%d", E.cy + 1, E.numrows); //E.cy is the current line number but add 1 since E.cy starts at index 0
 
     if(len > E.screencolumns){
@@ -747,6 +753,7 @@ void initEditor(){
     //set rows to 0 at first
     E.numrows = 0;
     E.row = NULL;
+    E.dirty = 0;
     E.filename = NULL;
     E.statusmsg[0] = '\0';
     E.statusmsg_time = 0;
