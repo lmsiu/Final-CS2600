@@ -1,5 +1,4 @@
-//making a kilo text editor for fun!
-
+//making a kilo text editor for fun! this is a line that was added
 //*** includes ***//
 #define _DEFAULT_SOURCE
 #define _BSD_SOURCE
@@ -310,9 +309,22 @@ void editorAppendRow(char *s, size_t len){
 
     E.numrows++;
     E.dirty++;
+}
 
-    
+void editorFreeRow(erow *row){
+    free(row->render);
+    free(row->chars);
+}
 
+//delete a row if backspacing at the begining of a row
+void editorDeleteRow(int at){
+    if(at < 0 || at >= E.numrows){
+        return;
+    }
+    editorFreeRow(&E.row[at]);
+    memmove(&E.row[at], &E.row[at+1], sizeof(erow) * (E.numrows - at -1));
+    E.numrows--;
+    E.dirty++;
 }
 
 //allow for cahrs to be insterted into an erow
@@ -327,6 +339,16 @@ void editorRowInsertChar(erow *row, int at, int c){
     row->chars[at] = c;
     editorUpdateRow(row);
 
+    E.dirty++;
+}
+
+//appends a string to the end of another string
+void editorRowAppendString(erow *row, char *s, size_t len){
+    row->chars = realloc(row->chars, row->size + len + 1);
+    memcpy(&row->chars[row->size], s, len);
+    row->size += len;
+    row->chars[row->size] = '\0';
+    editorUpdateRow(row);
     E.dirty++;
 }
 
@@ -357,10 +379,19 @@ void editorDelChar(){
         return;
     }
 
+    if(E.cx == 0 && E.cy == 0){
+        return;
+    }
+
     erow *row = &E.row[E.cy];
     if(E.cx > 0){
         editorRowDeleteChar(row, E.cx - 1);
         E.cx--;
+    } else{
+        E.cx = E.row[E.cy - 1].size;
+        editorRowAppendString(&E.row[E.cy-1], row->chars, row->size);
+        editorDeleteRow(E.cy);
+        E.cy--;
     }
 }
 
