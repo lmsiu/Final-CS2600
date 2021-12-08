@@ -53,6 +53,7 @@ struct editorConfig{
     int screencolumns;
     int numrows;
     erow *row;
+    char *filename;
     struct termios orig_termios;
 };
 
@@ -307,6 +308,10 @@ void editorAppendRow(char *s, size_t len){
 
 //allow users to open files
 void editorOpen(char *filename){
+    free(E.filename);
+    E.filename = strdup(filename); //save the file name to filename
+
+
     FILE *fp = fopen(filename, "r");
     if(!fp){
         die("fopen");
@@ -477,7 +482,8 @@ void editorScroll(){
     }
 }
 
-//make a column of ~
+//draw rows and print out file content
+//if no file, print a column of ~
 void editorDrawRows(struct abuf *ab){
     int y;
     for(y=0; y < E.screenrows; y++){
@@ -529,6 +535,37 @@ void editorDrawRows(struct abuf *ab){
     }
 }
 
+//draw the status bar with inverted colors
+void editorDrawStatusBar(struct abuf *ab){
+    abAppend(ab, "\x1b[7m", 4);
+    //get file name and print up to 20 chars of it to the line, if no file name print "No Name"
+    char status[80], rstatus[80];
+
+    int len = snprintf(status, sizeof(status), "%.20s - %d lines", E.filename ? E.filename : "[No Name]", E.numrows);
+    int rlen = snprintf(rstatus, sizeof(rstatus), "%d/%d", E.cy + 1, E.numrows); //E.cy is the current line number but add 1 since E.cy starts at index 0
+
+    if(len > E.screencolumns){
+        len = E.screencolumns;
+    }
+
+    abAppend(ab, status, len);
+
+    while(len < E.screencolumns){
+        if(E.screencolumns - len == rlen){
+            //print current line number
+            abAppend(ab, rstatus, rlen);
+            break;
+        } else{
+        abAppend(ab, " ", 1);
+        len++;
+        }
+    }
+
+    abAppend(ab, "\x1b[m", 3);
+
+
+}
+
 void editorRefreshScreen(){
     editorScroll();
 
@@ -547,6 +584,7 @@ void editorRefreshScreen(){
     //write(STDOUT_FILENO, "\x1b[H", 3);
 
     editorDrawRows(&ab);
+    editorDrawStatusBar(&ab);
 
     //move cursor to E.cx and E.cy
     char buff[32];
@@ -576,6 +614,7 @@ void initEditor(){
     //set rows to 0 at first
     E.numrows = 0;
     E.row = NULL;
+    E.filename = NULL;
     
     if(getWindowsSize(&E.screenrows, &E.screencolumns) == -1){
         die("getWindowSize");
