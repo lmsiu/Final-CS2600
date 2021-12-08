@@ -73,7 +73,7 @@ struct editorConfig E;
 //*** prototypes ***//
 void editorSetStatusMessage(const char *fmt, ...);
 void editorRefreshScreen();
-char *editorPrompt(char *prompt);
+char *editorPrompt(char *prompt, void (*callback)(char *, int));
 
 //*** terminal ***//
 void die(const char *s){
@@ -498,7 +498,7 @@ void editorOpen(char *filename){
 //write strings from editorRowsToString() to disk
 void editorSave(){
     if(E.filename == NULL){
-        E.filename = editorPrompt("Save as: %s (ESC to cancel)");
+        E.filename = editorPrompt("Save as: %s (ESC to cancel)", NULL);
     }
 
     if(E.filename == NULL){
@@ -533,13 +533,13 @@ void editorSave(){
 
 //*** find/search ***//
 
-//search
-void editorFind(){
-    char *query = editorPrompt("Search: %s (ESC to cancel)");
-    if(query == NULL){
+//incrimental searching
+void editorFindCallback(char *query, int key){
+    if(key == '\r' || key == '\x1b'){
         return;
     }
 
+    //actual searching
     int i;
     for(i = 0; i<E.numrows; i++){
         erow *row = &E.row[i];
@@ -551,8 +551,33 @@ void editorFind(){
             break;
         }
     }
+}
 
-    free(query);
+
+
+//search
+void editorFind(){
+    int saved_cx = E.cx;
+    int saved_cy = E.cy;
+    int saved_coloff = E.coloff;
+    int saved_rowoff = E.rowoff;
+
+
+    char *query = editorPrompt("Search: %s (ESC to cancel)", editorFindCallback);
+    //if(query == NULL){
+      //  return;
+    //}
+
+    if(query){
+        free(query);
+    }else{
+        //restore cursor if search is cancelled
+        E.cx = saved_cx;
+        E.cy = saved_cy;
+        E.coloff = saved_coloff;
+        E.rowoff = saved_rowoff;
+    }
+    
 }
 
 //*** append buffer ***//
@@ -584,7 +609,7 @@ void abFree(struct abuf *ab){
 
 //*** input ***//
 
-char *editorPrompt(char *prompt){
+char *editorPrompt(char *prompt, void (*callback)(char *, int)){
     size_t bufsize = 128;
     char *buff = malloc(bufsize);
 
@@ -603,11 +628,17 @@ char *editorPrompt(char *prompt){
         }else if(c == '\x1b'){
             //allows users to hit ESC to cancel input prompt
             editorSetStatusMessage("");
+            if(callback){
+                callback(buff,c);
+            }
             free(buff);
             return NULL;
         }else if(c == '\r'){
             if(buflen !=0){
                 editorSetStatusMessage("");
+                if(callback){
+                callback(buff,c);
+                }
                 return buff;
             }
         }else if(!iscntrl(c) && c < 128){
@@ -618,6 +649,10 @@ char *editorPrompt(char *prompt){
             buff[buflen++]=c;
             buff[buflen] = '\0';
         }
+
+        if(callback){
+                callback(buff,c);
+            }
     }
 }
 
