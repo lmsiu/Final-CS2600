@@ -271,6 +271,24 @@ int editorRowCxToRx(erow *row, int cx){
     return rx;
 }
 
+//handles tabs in search
+int editorRowRxToCx(erow *row, int rx){
+    int cur_rx = 0;
+    int cx;
+    for(cx = 0; cx < row->size; cx++){
+        if(row->chars[cx] == '\t'){
+            cur_rx += (KILO_TAB_STOP-1) - (cur_rx % KILO_TAB_STOP);
+        }
+        cur_rx++;
+
+        if(cur_rx > rx){
+            return cx;
+        }
+    }
+
+    return cx;
+}
+
 //fill in render string
 void editorUpdateRow(erow *row){
     int tabs = 0;
@@ -513,6 +531,30 @@ void editorSave(){
     free(buff);
 }
 
+//*** find/search ***//
+
+//search
+void editorFind(){
+    char *query = editorPrompt("Search: %s (ESC to cancel)");
+    if(query == NULL){
+        return;
+    }
+
+    int i;
+    for(i = 0; i<E.numrows; i++){
+        erow *row = &E.row[i];
+        char *match = strstr(row->render, query);
+        if(match){
+            E.cy = i;
+            E.cx = editorRowRxToCx(row, match - row->render);
+            E.rowoff = E.numrows;
+            break;
+        }
+    }
+
+    free(query);
+}
+
 //*** append buffer ***//
 //buffers for rewriting and refreashing things
 struct abuf {
@@ -659,6 +701,11 @@ void editorProcessKeyPress(){
                 //move to the end of the line
                 E.cx = E.row[E.cy].size;
             }
+            break;
+
+        case CTRL_KEY('f'):
+            //click ctrl-f for search
+            editorFind();
             break;
 
         case BACKSPACE:
@@ -916,7 +963,7 @@ int main(int argc, char *argv[]){
     //press q to quit when in canonical mode
     //canonical mode needs to have enter pressed to read the line, we want raw mode
 
-    editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit");
+    editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find");
     
     while(1){
         editorRefreshScreen();
