@@ -1,4 +1,4 @@
-//making a kilo text editor
+//making a kilo text editor for fun!
 
 //*** includes ***//
 #define _DEFAULT_SOURCE
@@ -16,6 +16,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include <stdarg.h>
+#include <fcntl.h>
 
 //definitions
 //welcome msg
@@ -24,6 +25,7 @@
 #define KILO_TAB_STOP 8 //tab spaces
 
 enum editorKey{
+    BACKSPACE = 127, //define specail char so it doesn't get "typed" when text editing
     ARROW_LEFT = 1000,
     ARROW_RIGHT,
     ARROW_UP,
@@ -63,6 +65,9 @@ struct editorConfig{
 
 
 struct editorConfig E;
+
+//*** prototypes ***//
+void editorSetStatusMessage(const char *fmt, ...);
 
 //*** terminal ***//
 void die(const char *s){
@@ -333,6 +338,28 @@ void editorInsertChar(int c){
 
 //*** file i/o ***//
 
+//move array of erow struct to a single string to be written to a file
+char *editorRowsToString(int *buflen){
+    int totlen = 0;
+    int j;
+    for(j = 0; j < E.numrows; j++){
+        totlen += E.row[j].size + 1;
+    }
+
+    *buflen = totlen;
+
+    char *buff = malloc(totlen);
+    char *p = buff;
+    for(j = 0; j < E.numrows; j++){
+        memcpy(p, E.row[j].chars, E.row[j].size);
+        p += E.row[j].size;
+        *p = '\n';
+        p++;
+    }
+
+    return buff;
+}
+
 //allow users to open files
 void editorOpen(char *filename){
     free(E.filename);
@@ -362,6 +389,36 @@ void editorOpen(char *filename){
 
     free(line);
     fclose(fp);
+}
+
+//write strings from editorRowsToString() to disk
+void editorSave(){
+    if(E.filename == NULL){
+        return;
+    }
+
+    int len;
+    char *buff = editorRowsToString(&len);
+
+    int fd = open(E.filename, O_RDWR | O_CREAT, 0644);
+    if(fd != -1){
+        if(ftruncate(fd, len) != -1){
+            if(write(fd, buff, len)== len){
+                close(fd);
+                free(buff);
+                editorSetStatusMessage("%d bytes written to disk", len);
+                return;
+            }
+        }
+        close(fd);
+        editorSetStatusMessage("Can't save! I/O error: %s", strerror(errno));
+    }
+
+
+    //ftruncate(fd, len);
+    //write(fd, buff, len);
+    //close(fd);
+    free(buff);
 }
 
 //*** append buffer ***//
@@ -439,11 +496,21 @@ void editorProcessKeyPress(){
     int c = editorReadKey();
 
     switch(c){
+        case '\r':
+            //todo
+            break;
+
+
         case CTRL_KEY('q'):
-        write(STDOUT_FILENO, "\x1b[2J", 4);
-        write(STDOUT_FILENO, "\x1b[H", 3);
-        exit(0);
-        break;
+            write(STDOUT_FILENO, "\x1b[2J", 4);
+            write(STDOUT_FILENO, "\x1b[H", 3);
+            exit(0);
+            break;
+        
+        case CTRL_KEY('s'):
+            editorSave();
+            break;
+
 
         case HOME_KEY:
             E.cx = 0;
@@ -454,6 +521,12 @@ void editorProcessKeyPress(){
                 //move to the end of the line
                 E.cx = E.row[E.cy].size;
             }
+            break;
+
+        case BACKSPACE:
+        case CTRL_KEY('h'):
+        case DEL_KEY:
+        /*TODO*/
             break;
 
         case PAGE_UP:
@@ -482,6 +555,10 @@ void editorProcessKeyPress(){
         case ARROW_LEFT:
         case ARROW_RIGHT:
             editorMoveCursor(c);
+            break;
+
+        case CTRL_KEY('l'):
+        case '\x1b':
             break;
 
         default:
@@ -695,7 +772,7 @@ int main(int argc, char *argv[]){
     //press q to quit when in canonical mode
     //canonical mode needs to have enter pressed to read the line, we want raw mode
 
-    editorSetStatusMessage("HELP: Ctrl-Q = quit");
+    editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit");
     
     while(1){
         editorRefreshScreen();
