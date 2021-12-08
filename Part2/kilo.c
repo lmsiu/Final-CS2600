@@ -308,6 +308,8 @@ void abFree(struct abuf *ab){
 //input
 
 void editorMoveCursor(int key){
+    erow *row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
+
     switch(key){
         case ARROW_LEFT:
         if(E.cx != 0){
@@ -315,7 +317,9 @@ void editorMoveCursor(int key){
         }
             break;
         case ARROW_RIGHT:
+        if((row && E.cx) < row->size){
             E.cx++;
+        }
             break;
         case ARROW_UP:
         if(E.cy != 0){
@@ -327,6 +331,13 @@ void editorMoveCursor(int key){
             E.cy++;
         }
             break;
+    }
+
+    //snap cursor to end of line
+    row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
+    int rowlen = row ? row->size : 0;
+    if(E.cx > rowlen){
+        E.cx = rowlen;
     }
 }
 
@@ -425,7 +436,7 @@ void editorDrawSquigleRows(struct abuf *ab){
         }
 
 
-        abAppend(ab, "~", 1);
+        //abAppend(ab, "~", 1);
         //write(STDOUT_FILENO, "~", 1);
         //make a column of ~
         //clear each line before redrawing them
@@ -495,14 +506,11 @@ int main(int argc, char *argv[]){
     if(argc >= 2){
         editorOpen(argv[1]);
     }
-    
 
     //read 1 character from the standaed input into c until there are no more bytes to read
     //return 0 at the end of the file
     //press q to quit when in canonical mode
     //canonical mode needs to have enter pressed to read the line, we want raw mode
-    
-
 
     while(1){
         editorRefreshScreen();
