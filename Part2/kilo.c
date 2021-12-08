@@ -14,6 +14,8 @@
 #include <sys/ioctl.h>
 #include <string.h>
 #include <sys/types.h>
+#include <time.h>
+#include <stdarg.h>
 
 //definitions
 //welcome msg
@@ -54,6 +56,8 @@ struct editorConfig{
     int numrows;
     erow *row;
     char *filename;
+    char statusmsg[80];
+    time_t statusmsg_time;
     struct termios orig_termios;
 };
 
@@ -562,8 +566,22 @@ void editorDrawStatusBar(struct abuf *ab){
     }
 
     abAppend(ab, "\x1b[m", 3);
+    abAppend(ab, "\r\n", 2);
 
 
+}
+
+void editorDrawMessageBar(struct abuf *ab){
+    abAppend(ab, "\x1b[K", 3);
+    int msglen = strlen(E.statusmsg);
+
+    if(msglen > E.screencolumns){
+        msglen = E.screencolumns;
+    }
+
+    if(msglen && time(NULL) - E.statusmsg_time < 5){
+        abAppend(ab, E.statusmsg, msglen);
+    }
 }
 
 void editorRefreshScreen(){
@@ -585,6 +603,7 @@ void editorRefreshScreen(){
 
     editorDrawRows(&ab);
     editorDrawStatusBar(&ab);
+    editorDrawMessageBar(&ab);
 
     //move cursor to E.cx and E.cy
     char buff[32];
@@ -599,6 +618,16 @@ void editorRefreshScreen(){
     abFree(&ab);
 }
 
+//... allows for any number of args to be taken in
+void editorSetStatusMessage(const char *fmt, ...){
+    //used to store the args
+    va_list ap;
+    va_start(ap, fmt);
+    //kinda like a printf with multiple vars
+    vsnprintf(E.statusmsg, sizeof(E.statusmsg), fmt, ap);
+    va_end(ap);
+    E.statusmsg_time = time(NULL);
+}
 
 
 //*** init ***//
@@ -615,13 +644,16 @@ void initEditor(){
     E.numrows = 0;
     E.row = NULL;
     E.filename = NULL;
+    E.statusmsg[0] = '\0';
+    E.statusmsg_time = 0;
     
     if(getWindowsSize(&E.screenrows, &E.screencolumns) == -1){
         die("getWindowSize");
     }
 
     //make space for a status bar
-    E.screenrows -= 1;
+    E.screenrows -= 2;
+    
 }
 
 int main(int argc, char *argv[]){
@@ -636,6 +668,8 @@ int main(int argc, char *argv[]){
     //press q to quit when in canonical mode
     //canonical mode needs to have enter pressed to read the line, we want raw mode
 
+    editorSetStatusMessage("HELP: Ctrl-Q = quit");
+    
     while(1){
         editorRefreshScreen();
         editorProcessKeyPress();
