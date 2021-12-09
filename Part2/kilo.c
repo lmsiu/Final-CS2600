@@ -42,7 +42,8 @@ enum editorKey{
 
 enum editorHighlight{
     HL_NORMAL = 0,
-    HL_NUMBER
+    HL_NUMBER, 
+    HL_MATCH
 };
 
 //*** data ***//
@@ -262,16 +263,32 @@ int getWindowsSize(int *rows, int *columns){
 
 //*** syntax highlighting ***//
 
+//return true if the char is considered a seperator
+int is_seperator(int c){
+    return isspace(c) || c == '\0' || strchr(",.()+-/*=~%<>[];", c) != NULL;
+}
+
 //get a row and highlight each char by setting each value to hl in the array
 void editorUpdateSyntx(erow *row){
     row->hl = realloc(row->hl, row->size);
     memset(row->hl, HL_NORMAL, row->size); //set all chars to normal by default
 
-    int i;
-    for(i = 0; i < row->rsize; i++){
-        if(isdigit(row->render[i])){
+    int prev_sep = 1;
+
+    int i = 0;
+    while(i<row->size){
+        char c = row->render[i];
+        unsigned char prev_hl = (i > 0) ? row->hl[i-1] : HL_NORMAL;
+
+        if((isdigit(c) && (prev_sep || prev_hl == HL_NUMBER)) || (c == '.' && prev_hl == HL_NUMBER)){
             row->hl[i] = HL_NUMBER;
+            i++;
+            prev_sep = 0;
+            continue;
         }
+
+        prev_sep = is_seperator(c);
+        i++;
     }
 }
 
@@ -280,7 +297,8 @@ int editorSyntaxToColor(int hl){
     switch(hl){
         case HL_NUMBER:
             return 31;
-        
+        case HL_MATCH:
+            return 34;
         default:
             return 37;
     }
@@ -574,6 +592,15 @@ void editorFindCallback(char *query, int key){
     static int last_match = -1;
     static int direction = 1;
 
+    static int saved_hl_line;
+    static char *saved_hl = NULL;
+
+    if(saved_hl){
+        memcpy(E.row[saved_hl_line].hl, saved_hl, E.row[saved_hl_line].rsize);
+        free(saved_hl);
+        saved_hl = NULL;
+    }
+
     //allows for scrolling through results
     if(key == '\r' || key == '\x1b'){
         last_match = -1;
@@ -611,6 +638,12 @@ void editorFindCallback(char *query, int key){
             E.cy = current;
             E.cx = editorRowRxToCx(row, match - row->render);
             E.rowoff = E.numrows;
+
+            saved_hl_line = current;
+            saved_hl = malloc(row->rsize);
+            memcpy(saved_hl, row->hl, row->rsize);
+
+            memset(&row->hl[match - row->render], HL_MATCH, strlen(query));
             break;
         }
     }
