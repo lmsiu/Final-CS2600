@@ -44,6 +44,7 @@ enum editorKey{
 enum editorHighlight{
     HL_NORMAL = 0,
     HL_COMMENT,
+    HL_MLCOMMENT, //multiline comments
     HL_KEYWORD1,
     HL_KEYWORD2,
     HL_STRING,
@@ -203,7 +204,7 @@ int editorReadKey(){
                     case '8': return END_KEY;
                 }
             }
-        }else{
+        } else {
         switch(seq[1]){
             case 'A': return ARROW_UP;
             case 'B': return ARROW_DOWN;
@@ -213,7 +214,7 @@ int editorReadKey(){
             case 'F': return END_KEY;
         }
     }
-    }else if(seq[0] == 'O'){
+    } else if(seq[0] == 'O'){
         switch(seq[1]){
             case 'H': return HOME_KEY;
             case 'F': return END_KEY;
@@ -222,7 +223,7 @@ int editorReadKey(){
     }
 
     return '\x1b';
-    }else{
+    } else {
     return c;
     }
 }
@@ -265,7 +266,7 @@ int getCursorPosition(int *rows, int *cols){
     while(read(STDIN_FILENO, &c, 1) == 1){
         if(iscntrl(c)){
             printf("%d\r\n", c);
-        }else{
+        } else {
             printf("%d ('c')\r\n", c, c);
         }
     }
@@ -347,7 +348,7 @@ void editorUpdateSyntx(erow *row){
                 prev_sep = 1;
                 continue;
             
-        }else{
+        } else {
             if(c == '"' || c == '\''){
                 in_string = c;
                 row->hl[i] = HL_STRING;
@@ -400,6 +401,7 @@ void editorUpdateSyntx(erow *row){
 int editorSyntaxToColor(int hl){
     switch(hl){
         case HL_COMMENT:
+        case HL_MLCOMMENT:
             return 36; //cyan
         case HL_KEYWORD1:
             return 33; //yellow
@@ -502,7 +504,7 @@ void editorUpdateRow(erow *row){
             while(idx % KILO_TAB_STOP != 0){
                 row->render[idx++] = ' ';
             }
-        }else{
+        } else {
             row->render[idx++] = row->chars[j];
         }
     }
@@ -602,7 +604,7 @@ void editorInsertChar(int c){
 void editorInsertNewLine(){
     if(E.cx == 0){
         editorInsertRow(E.cy, "", 0);
-    }else{
+    } else {
         erow *row = &E.row[E.cy];
         editorInsertRow(E.cy+1, &row->chars[E.cx], row->size - E.cx);
         row = &E.row[E.cy];
@@ -627,7 +629,7 @@ void editorDelChar(){
     if(E.cx > 0){
         editorRowDeleteChar(row, E.cx - 1);
         E.cx--;
-    } else{
+    } else {
         E.cx = E.row[E.cy - 1].size;
         editorRowAppendString(&E.row[E.cy-1], row->chars, row->size);
         editorDeleteRow(E.cy);
@@ -754,11 +756,11 @@ void editorFindCallback(char *query, int key){
         last_match = -1;
         direction = 1;
         return;   
-    }else if(key == ARROW_RIGHT || key == ARROW_DOWN){
+    } else if(key == ARROW_RIGHT || key == ARROW_DOWN){
         direction = 1;
-    }else if(key == ARROW_LEFT || key == ARROW_UP){
+    } else if(key == ARROW_LEFT || key == ARROW_UP){
         direction = -1;
-    }else{
+    } else {
         last_match = -1;
         direction = 1;
     }
@@ -775,7 +777,7 @@ void editorFindCallback(char *query, int key){
 
         if(current == -1){
             current = E.numrows -1;
-        }else if(current ==E.numrows){
+        } else if(current ==E.numrows){
             current = 0;
         }
 
@@ -814,7 +816,7 @@ void editorFind(){
 
     if(query){
         free(query);
-    }else{
+    } else {
         //restore cursor if search is cancelled
         E.cx = saved_cx;
         E.cy = saved_cy;
@@ -869,7 +871,7 @@ char *editorPrompt(char *prompt, void (*callback)(char *, int)){
             if(buflen != 0){
                 buff[--buflen] = '\0';
             }
-        }else if(c == '\x1b'){
+        } else if(c == '\x1b'){
             //allows users to hit ESC to cancel input prompt
             editorSetStatusMessage("");
             if(callback){
@@ -877,7 +879,7 @@ char *editorPrompt(char *prompt, void (*callback)(char *, int)){
             }
             free(buff);
             return NULL;
-        }else if(c == '\r'){
+        } else if(c == '\r'){
             if(buflen !=0){
                 editorSetStatusMessage("");
                 if(callback){
@@ -885,7 +887,7 @@ char *editorPrompt(char *prompt, void (*callback)(char *, int)){
                 }
                 return buff;
             }
-        }else if(!iscntrl(c) && c < 128){
+        } else if(!iscntrl(c) && c < 128){
             if(buflen == bufsize -1){
                 bufsize *= 2;
                 buff = realloc(buff, bufsize);
@@ -907,7 +909,7 @@ void editorMoveCursor(int key){
         case ARROW_LEFT:
             if(E.cx != 0){
             E.cx--;
-            }else if(E.cy > 0){
+            } else if(E.cy > 0){
                 //move to prev line if at end
                 E.cy--;
                 E.cx = E.row[E.cy].size;
@@ -916,7 +918,7 @@ void editorMoveCursor(int key){
         case ARROW_RIGHT:
             if(row && E.cx < row->size){
             E.cx++;
-            }else if(row && E.cx == row->size){
+            } else if(row && E.cx == row->size){
                 //move to next line if at the end of a line
                 E.cy++;
                 E.cx = 0;
@@ -1085,10 +1087,10 @@ void editorDrawRows(struct abuf *ab){
             abAppend(ab, " ", 1);
         }
         abAppend(ab, welcome, welcomelen);
-        } else{
+        } else {
             abAppend(ab, "~", 1);
         }
-        }else {
+        } else {
             int len = E.row[filerow].rsize - E.coloff;
             if(len < 0){
                 len = 0;
@@ -1102,14 +1104,24 @@ void editorDrawRows(struct abuf *ab){
             int current_color = -1;
             int j;
             for(j = 0; j < len; j++){
-                //add color to syntax but only if there is a color change
-                if(hl[j] == HL_NORMAL){
+                if(iscntrl(c[j])){
+                    char sym = (c[j] <= 26) ? '@' + c[j] : '?';
+                    abAppend(ab, "\x1b[7m", 4);
+                    abAppend(ab, &sym, 1);
+                    abAppend(ab, "\x1b[m", 3);
+                    if(current_color != -1){
+                        char buff[16];
+                        int clen = snprintf(buff, sizeof(buff), "\x1b[%dm", current_color);
+                        abAppend(ab, buff, clen);
+                    }
+                }else if(hl[j] == HL_NORMAL){
+                    //add color to syntax but only if there is a color change
                     if(current_color != -1){
                         abAppend(ab, "\x1b[39m", 5);
                         current_color = -1;
                     }
                 abAppend(ab, &c[j], 1);
-                }else{
+                } else {
                     int color = editorSyntaxToColor(hl[j]);
                     if(color != current_color){
                         current_color = color;
@@ -1157,7 +1169,7 @@ void editorDrawStatusBar(struct abuf *ab){
             //print current line number
             abAppend(ab, rstatus, rlen);
             break;
-        } else{
+        } else {
         abAppend(ab, " ", 1);
         len++;
         }
@@ -1285,7 +1297,7 @@ int main(int argc, char *argv[]){
         //iscntrl tests if a char is a control char
         if(iscntrl(c)){
             printf("%d\r\n", c);
-        }else{
+        } else {
             printf("%d ('%c')\r\n", c, c);
         }
         if(c == CTRL_KEY('q')){
